@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virtual Treasure Hunt</title>
+    <style>
+        :root {
+            --bg-color: #0a0a0a;
+            --text-color: #d4d4d4;
+            --accent-color: #4a4a4a;
+            --font-main: 'Courier New', Courier, monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: var(--font-main);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+            overflow: hidden;
+        }
+
+        #game-container {
+            max-width: 800px;
+            width: 100%;
+            border: 1px solid var(--accent-color);
+            padding: 30px;
+            background: linear-gradient(145deg, #0f0f0f, #050505);
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            border-radius: 4px;
+        }
+
+        #output {
+            min-height: 150px;
+            margin-bottom: 20px;
+            line-height: 1.6;
+            font-size: 1.1rem;
+            white-space: pre-wrap;
+        }
+
+        #input-area {
+            display: flex;
+            gap: 10px;
+            opacity: 0;
+            transition: opacity 0.5s ease-in;
+        }
+
+        #input-area.visible {
+            opacity: 1;
+        }
+
+        input {
+            flex-grow: 1;
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid var(--accent-color);
+            color: var(--text-color);
+            font-family: var(--font-main);
+            font-size: 1.1rem;
+            padding: 5px;
+            outline: none;
+        }
+
+        input:focus {
+            border-bottom-color: var(--text-color);
+        }
+
+        button {
+            background: transparent;
+            border: 1px solid var(--accent-color);
+            color: var(--text-color);
+            padding: 5px 15px;
+            cursor: pointer;
+            font-family: var(--font-main);
+            transition: all 0.3s;
+        }
+
+        button:hover {
+            background: var(--accent-color);
+        }
+
+        .cursor {
+            display: inline-block;
+            width: 10px;
+            height: 1.2rem;
+            background: var(--text-color);
+            margin-left: 5px;
+            animation: blink 1s infinite;
+            vertical-align: middle;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+
+        @media (max-width: 600px) {
+            #game-container {
+                padding: 15px;
+            }
+            #output {
+                font-size: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div id="output"></div>
+    <div id="input-area">
+        <span>></span>
+        <input type="text" id="answer-input" autocomplete="off" spellcheck="false">
+        <button id="submit-btn">SEND</button>
+    </div>
+</div>
+
+<script>
+    /**
+     * MISSION DICTIONARY
+     * Edit this section to change questions and answers.
+     */
+    const missions = [
+        {
+            text: "Welcome, Koby. You'll have to solve a handful of puzzles to get your prize. Let's see your skill. You'll probably need to ask others for help. No googling or AI allowed. And I'll know if you do, because everybody knows that the walls have _____.",
+            answer: "ears",
+            success: "You're on the right track."
+        },
+        {
+            text: "On your mission, you run into a lady named Joyce. To get to the next stop, she'll need to _____.",
+            answer: "drive",
+            success: "JOYCE! DRIVE!"
+        },
+        {
+            text: "A long time ago in a galaxy far, far away...",
+            answer: "Star Wars",
+            success: "The Force is strong with you."
+        },
+        {
+            text: "Oh, the places you'll go! What is the key to adventure and success in life?",
+            answer: "Imagination",
+            success: "Absolutely! Imagination is the key to endless possibilities."
+        },
+        {
+            text: "As you fly through this mission, you stop to wonder. Which would be worse: to live as a monster, or to ____",
+            answer: "die as a good man",
+            success: "We'll get answers soon."
+        },
+        {
+            text: "Translate the Latin phrase: 'Carpe Diem'",
+            answer: "Seize the day",
+            success: "Carpe Diem! Seize the day, boys. Make your lives extraordinary."
+        },
+        {
+            text: "There is a place where the _____ ends.",
+            answer: "sidewalk",
+            success: "And there the grass grows soft and white."
+        },
+        {
+            text: "These too easy for you? Let's see. One of the crew has a password. But which one? Their name is scrambled: 'ONSIAY IODM'",
+            answer: "violet",
+            success: "Say hi to Siona! You got it!"
+        },
+        {
+            text: "Nearing the end now. A little math to keep your brain healthy. What is the integral of 2^e cos(x) dx?",
+            answer: "2^e sin(x) + C",
+            success: "On fire."
+        },
+        {
+            text: "Final question. What is Rickford's favorite musical?",
+            answer: "Pippin",
+            success: "Bravo! Discover your gift in the corner of the studio near the trophy. Good work."
+        }
+    ];
+
+    const outputElement = document.getElementById('output');
+    const inputArea = document.getElementById('input-area');
+    const answerInput = document.getElementById('answer-input');
+    const submitBtn = document.getElementById('submit-btn');
+
+    let currentMissionIndex = 0;
+    let isTyping = false;
+
+    async function typeWriter(text) {
+        isTyping = true;
+        inputArea.classList.remove('visible');
+        outputElement.innerHTML = '';
+        
+        const textNode = document.createElement('span');
+        const cursor = document.createElement('span');
+        cursor.className = 'cursor';
+        outputElement.appendChild(textNode);
+        outputElement.appendChild(cursor);
+
+        for (let i = 0; i < text.length; i++) {
+            textNode.textContent += text.charAt(i);
+            await new Promise(resolve => setTimeout(resolve, 40));
+            // Auto-scroll if content overflows
+            window.scrollTo(0, document.body.scrollHeight);
+        }
+        
+        isTyping = false;
+        inputArea.classList.add('visible');
+        answerInput.focus();
+    }
+
+    async function handleSubmission() {
+        if (isTyping) return;
+
+        const input = answerInput.value.trim().toLowerCase();
+        if (!input) return;
+
+        const mission = missions[currentMissionIndex];
+        answerInput.value = '';
+
+        if (input === mission.answer.toLowerCase()) {
+            await typeWriter(mission.success);
+            currentMissionIndex++;
+            
+            if (currentMissionIndex < missions.length) {
+                await new Promise(resolve => setTimeout(resolve, 1500));
+                await typeWriter(missions[currentMissionIndex].text);
+            } else {
+                // End of game
+                inputArea.style.display = 'none';
+                const endMsg = document.createElement('div');
+                endMsg.style.marginTop = '20px';
+                endMsg.style.color = '#888';
+                endMsg.textContent = "[SYSTEM: MISSION COMPLETE]";
+                outputElement.appendChild(endMsg);
+            }
+        } else {
+            await typeWriter("Incorrect. Try again.\n\n" + mission.text);
+        }
+    }
+
+    submitBtn.addEventListener('click', handleSubmission);
+    answerInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') handleSubmission();
+    });
+
+    // Start the game
+    window.onload = () => {
+        typeWriter(missions[0].text);
+    };
+</script>
+
+</body>
+</html>
